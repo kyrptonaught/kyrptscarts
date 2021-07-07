@@ -3,7 +3,7 @@
   "package": "net.kyrptonaught.kyrptcarts.mixin",
   "compatibilityLevel": "JAVA_16",
   "mixins": [
-
+    "WorldGetBEMixin"
   ],
   "injectors": {
     "defaultRequire": 1

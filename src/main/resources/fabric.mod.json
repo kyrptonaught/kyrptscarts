@@ -28,7 +28,7 @@
       "net.kyrptonaught.kyrptcarts.KyrptCartsClientMod"
     ],
     "mm:early_risers": [
-      "net.kyrptonaught.kyrptcarts.KyrptCartsMod"
+      "net.kyrptonaught.kyrptcarts.EarlyRiser"
     ]
   },
   "depends": {
