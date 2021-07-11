@@ -18,7 +18,7 @@ public class WorldGetBEMixin {
     @Inject(method = "Lnet/minecraft/world/World;getBlockEntity(Lnet/minecraft/util/math/BlockPos;)Lnet/minecraft/block/entity/BlockEntity;", at = @At("HEAD"), cancellable = true)
     public void spoofWCartBE(BlockPos pos, CallbackInfoReturnable<BlockEntity> cir) {
         if (pos instanceof BlockPosWBE)
-            cir.setReturnValue(((BlockPosWBE) pos).getStoredCart().blockEntity);
+            cir.setReturnValue(((BlockPosWBE) pos).getStoredCart().getBlockEntity());
     }
 
     @Unique

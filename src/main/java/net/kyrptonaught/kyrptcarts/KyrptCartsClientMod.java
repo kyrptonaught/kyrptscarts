@@ -16,7 +16,7 @@ public class KyrptCartsClientMod implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         EntityModelLayerImpl.PROVIDERS.put(KYRPTCARTENTITYLAYER, MinecartEntityModel::getTexturedModelData);
-        //EntityRendererRegistry.INSTANCE.register(KyrptCartsMod.cart_entity_type,KyrptCartEntityRenderer::new);
-        EntityRendererRegistry.INSTANCE.register(KyrptCartsMod.cart_entity_type, (EntityRendererFactory<AbstractMinecartEntity>) ctx -> new MinecartEntityRenderer<>(ctx, EntityModelLayers.MINECART));
+        EntityRendererRegistry.INSTANCE.register(KyrptCartsMod.cart_entity_type,KyrptCartEntityRenderer::new);
+        //EntityRendererRegistry.INSTANCE.register(KyrptCartsMod.cart_entity_type, (EntityRendererFactory<AbstractMinecartEntity>) ctx -> new MinecartEntityRenderer<>(ctx, EntityModelLayers.MINECART));
     }
 }

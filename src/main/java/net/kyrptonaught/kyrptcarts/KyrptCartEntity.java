@@ -1,15 +1,20 @@
 package net.kyrptonaught.kyrptcarts;
 
 import net.kyrptonaught.kyrptcarts.mixin.BlockEntityAccessor;
-import net.minecraft.block.BlockEntityProvider;
-import net.minecraft.block.BlockState;
+import net.minecraft.block.*;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.BlockEntityTicker;
 import net.minecraft.block.entity.BlockEntityType;
+import net.minecraft.block.entity.HopperBlockEntity;
 import net.minecraft.entity.EntityType;
+import net.minecraft.entity.data.DataTracker;
+import net.minecraft.entity.data.TrackedData;
+import net.minecraft.entity.data.TrackedDataHandler;
+import net.minecraft.entity.data.TrackedDataHandlerRegistry;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.vehicle.AbstractMinecartEntity;
 import net.minecraft.inventory.Inventory;
+import net.minecraft.inventory.SimpleInventory;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.item.ItemStack;
@@ -17,6 +22,7 @@ import net.minecraft.nbt.NbtCompound;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.world.World;
 
@@ -24,8 +30,8 @@ import java.util.Random;
 
 
 public class KyrptCartEntity extends AbstractMinecartEntity implements Inventory {
-
-    public BlockEntity blockEntity;
+    private static final TrackedData<NbtCompound> BE_NBT = DataTracker.registerData(KyrptCartEntity.class, TrackedDataHandlerRegistry.TAG_COMPOUND);
+    private BlockEntity blockEntity;
 
     protected KyrptCartEntity(EntityType<?> entityType, World world) {
         super(entityType, world);
@@ -38,6 +44,11 @@ public class KyrptCartEntity extends AbstractMinecartEntity implements Inventory
 
     public KyrptCartEntity(World world, double x, double y, double z) {
         super(KyrptCartsMod.cart_entity_type, world, x, y, z);
+
+    }
+    protected void initDataTracker() {
+        super.initDataTracker();
+        this.dataTracker.startTracking(BE_NBT,new NbtCompound());
     }
 
     public ActionResult interact(PlayerEntity player, Hand hand) {
@@ -48,117 +59,135 @@ public class KyrptCartEntity extends AbstractMinecartEntity implements Inventory
             return ActionResult.PASS;
         } else if (this.hasCustomBlock()) {
             BlockState heldBlock = this.getContainedBlock();
-            heldBlock.getBlock().onUse(heldBlock, this.world, new BlockPosWBE(this.getBlockPos(), this), player, hand, hit);
+            heldBlock.getBlock().onUse(heldBlock, this.world, fakeBlockPos(), player, hand, hit);
             return ActionResult.SUCCESS;
         } else if (player.getStackInHand(hand).getItem() instanceof BlockItem) {
             BlockState insertedBlock = ((BlockItem) player.getStackInHand(hand).getItem()).getBlock().getPlacementState(new ItemPlacementContext(player, hand, player.getStackInHand(hand), hit));
             this.setCustomBlock(insertedBlock);
             if (insertedBlock.getBlock() instanceof BlockEntityProvider) {
-                blockEntity = ((BlockEntityProvider) insertedBlock.getBlock()).createBlockEntity(new BlockPosWBE(this.getBlockPos(), this), insertedBlock);
-                blockEntity.setWorld(this.world);
+                addBE(insertedBlock);
             }
             return ActionResult.SUCCESS;
         } else {
             return ActionResult.PASS;
         }
     }
-
+    private void addBE(BlockState insertedBlock) {
+        blockEntity = ((BlockEntityProvider) insertedBlock.getBlock()).createBlockEntity(fakeBlockPos(), insertedBlock);
+        blockEntity.setWorld(this.world);
+        this.getDataTracker().set(BE_NBT, blockEntity.writeNbt(new NbtCompound()));
+    }
+    public BlockEntity getBlockEntity() {
+        if (blockEntity == null) {
+            blockEntity = BlockEntity.createFromNbt(fakeBlockPos(), this.getContainedBlock(), this.getDataTracker().get(BE_NBT));
+            if (blockEntity != null)
+                blockEntity.setWorld(this.world);
+        }
+        if(world.isClient)
+            blockEntity.readNbt(this.getDataTracker().get(BE_NBT));
+        return blockEntity;
+    }
     @Override
     public void tick() {
         super.tick();
-        if (blockEntity != null) {
-            ((BlockEntityAccessor) blockEntity).setPos(new BlockPosWBE(this.getBlockPos(), this));
+        // if(getContainedBlock().getProperties().contains(DispenserBlock.FACING))
+        //if(getContainedBlock().get(DispenserBlock.FACING).getAxis() != Direction.Axis.Y)
+        //    setCustomBlock(getContainedBlock().with(DispenserBlock.FACING,getHorizontalFacing()));
+        if (getBlockEntity() != null) {
+            ((BlockEntityAccessor) blockEntity).setPos(fakeBlockPos());
             BlockEntityTicker<BlockEntity> ticker = this.getContainedBlock().getBlockEntityTicker(this.world, (BlockEntityType<BlockEntity>) blockEntity.getType());
             if (ticker != null)
-                ticker.tick(this.world, new BlockPosWBE(this.getBlockPos(), this), this.getContainedBlock(), blockEntity);
+                ticker.tick(this.world, fakeBlockPos(), this.getContainedBlock(), blockEntity);
         }
         //kinda derpy
         if (world.isClient) {
-            getContainedBlock().getBlock().randomDisplayTick(getContainedBlock(), world, new BlockPosWBE(this.getBlockPos(), this), new Random());
+            getContainedBlock().getBlock().randomDisplayTick(getContainedBlock(), world, fakeBlockPos(), new Random());
         }
-    }
+        if (!world.isClient)
+            this.dataTracker.set(BE_NBT, blockEntity.writeNbt(new NbtCompound()));
 
+    }
+    public void onActivatorRail(int x, int y, int z, boolean powered) {
+        if (powered)
+            getContainedBlock().neighborUpdate(world, fakeBlockPos(), getContainedBlock().getBlock(), fakeBlockPos(), false);
+    }
     @Override
     public Type getMinecartType() {
         return KyrptCartsMod.KYRPT_CART_TYPE;
     }
 
-    public void readNbt(NbtCompound nbt) {
-        super.readNbt(nbt);
+    public void readCustomDataFromNbt(NbtCompound nbt) {
+        super.readCustomDataFromNbt(nbt);
         if (nbt.contains("benbt")) {
-            NbtCompound beNBT = nbt.getCompound("benbt");
-            blockEntity = BlockEntity.createFromNbt(new BlockPosWBE(this.getBlockPos(), this), this.getContainedBlock(), beNBT);
-            blockEntity.setWorld(this.world);
+            this.dataTracker.set(BE_NBT, nbt.getCompound("benbt"));
         }
     }
 
-    public NbtCompound writeNbt(NbtCompound nbt) {
-        super.writeNbt(nbt);
-        if (blockEntity != null) {
+    @Override
+    public void writeCustomDataToNbt(NbtCompound nbt) {
+        super.writeCustomDataToNbt(nbt);
+        if (getBlockEntity() != null) {
             NbtCompound beNBT = new NbtCompound();
             blockEntity.writeNbt(beNBT);
             nbt.put("benbt", beNBT);
+            this.dataTracker.set(BE_NBT, beNBT);
         }
-        return nbt;
     }
 
     @Override
     public int size() {
-        if (blockEntity instanceof Inventory)
-            return ((Inventory) blockEntity).size();
-        return 0;
+        return getStoredInventory().size();
     }
 
     @Override
     public boolean isEmpty() {
-        if (blockEntity instanceof Inventory)
-            return ((Inventory) blockEntity).isEmpty();
-        return false;
+        return getStoredInventory().isEmpty();
     }
 
     @Override
     public ItemStack getStack(int slot) {
-        if (blockEntity instanceof Inventory)
-            return ((Inventory) blockEntity).getStack(slot);
-        return ItemStack.EMPTY;
+        return getStoredInventory().getStack(slot);
     }
 
     @Override
     public ItemStack removeStack(int slot, int amount) {
-        if (blockEntity instanceof Inventory)
-            return ((Inventory) blockEntity).removeStack(slot, amount);
-        return ItemStack.EMPTY;
+        return getStoredInventory().removeStack(slot, amount);
     }
 
     @Override
     public ItemStack removeStack(int slot) {
-        if (blockEntity instanceof Inventory)
-            return ((Inventory) blockEntity).removeStack(slot);
-        return ItemStack.EMPTY;
+        return getStoredInventory().removeStack(slot);
     }
 
     @Override
     public void setStack(int slot, ItemStack stack) {
-        if (blockEntity instanceof Inventory)
-            ((Inventory) blockEntity).setStack(slot, stack);
+        getStoredInventory().setStack(slot, stack);
     }
 
     @Override
     public void markDirty() {
-        if (blockEntity instanceof Inventory)
-            ((Inventory) blockEntity).markDirty();
+        getStoredInventory().markDirty();
     }
 
     @Override
     public boolean canPlayerUse(PlayerEntity player) {
-        if (blockEntity instanceof Inventory)
-            return ((Inventory) blockEntity).canPlayerUse(player);
-        return false;
+        return getStoredInventory().canPlayerUse(player);
     }
 
     @Override
     public void clear() {
-        if (blockEntity instanceof Inventory)
-            ((Inventory) blockEntity).clear();
+        getStoredInventory().clear();
+    }
+
+    public BlockPos fakeBlockPos() {
+        return new BlockPosWBE(getBlockPos(), this);
+    }
+
+    public Inventory getStoredInventory() {
+        if (getBlockEntity()  instanceof Inventory)
+            return (Inventory) blockEntity;
+        if (getContainedBlock() instanceof InventoryProvider)
+            return ((InventoryProvider) getContainedBlock()).getInventory(getContainedBlock(), world, fakeBlockPos());
+        return new SimpleInventory(0);
     }
 }

@@ -5,6 +5,7 @@
   "mixins": [
     "AbstractMinecartEntityMixin",
     "BlockEntityAccessor",
+    "BlockEntityMixin",
     "WorldGetBEMixin"
   ],
   "injectors": {
