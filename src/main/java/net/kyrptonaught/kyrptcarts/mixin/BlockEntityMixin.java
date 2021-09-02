@@ -17,8 +17,9 @@ public abstract class BlockEntityMixin {
 
     @Inject(method = "toUpdatePacket",at = @At("RETURN"))
     public void stealUpdatePacket(CallbackInfoReturnable<BlockEntityUpdateS2CPacket> cir){
-        if(this.getPos() instanceof BlockPosWBE)
+        if(this.getPos() instanceof BlockPosWBE) {
             System.out.println("we out here");
-        System.out.println(cir.getReturnValue().getNbt());
+            System.out.println(cir.getReturnValue().getNbt());
+        }
     }
 }

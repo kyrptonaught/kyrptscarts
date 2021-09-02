@@ -78,38 +78,53 @@ public class KyrptCartEntity extends AbstractMinecartEntity implements Inventory
         this.getDataTracker().set(BE_NBT, blockEntity.writeNbt(new NbtCompound()));
     }
     public BlockEntity getBlockEntity() {
-        if (blockEntity == null) {
+        if (blockEntity == null && this.hasCustomBlock() && getContainedBlock() instanceof BlockEntityProvider) {
             blockEntity = BlockEntity.createFromNbt(fakeBlockPos(), this.getContainedBlock(), this.getDataTracker().get(BE_NBT));
             if (blockEntity != null)
                 blockEntity.setWorld(this.world);
         }
-        if(world.isClient)
+        //bad everytick hack
+        if (blockEntity != null && world.isClient)
             blockEntity.readNbt(this.getDataTracker().get(BE_NBT));
         return blockEntity;
     }
     @Override
     public void tick() {
         super.tick();
-        // if(getContainedBlock().getProperties().contains(DispenserBlock.FACING))
-        //if(getContainedBlock().get(DispenserBlock.FACING).getAxis() != Direction.Axis.Y)
-        //    setCustomBlock(getContainedBlock().with(DispenserBlock.FACING,getHorizontalFacing()));
-        if (getBlockEntity() != null) {
-            ((BlockEntityAccessor) blockEntity).setPos(fakeBlockPos());
-            BlockEntityTicker<BlockEntity> ticker = this.getContainedBlock().getBlockEntityTicker(this.world, (BlockEntityType<BlockEntity>) blockEntity.getType());
-            if (ticker != null)
-                ticker.tick(this.world, fakeBlockPos(), this.getContainedBlock(), blockEntity);
+        if(this.hasCustomBlock()) {
+            if (getBlockEntity() != null) {
+                ((BlockEntityAccessor) blockEntity).setPos(fakeBlockPos());
+                BlockEntityTicker<BlockEntity> ticker = this.getContainedBlock().getBlockEntityTicker(this.world, (BlockEntityType<BlockEntity>) blockEntity.getType());
+                if (ticker != null)
+                    ticker.tick(this.world, fakeBlockPos(), this.getContainedBlock(), blockEntity);
+                //bad everytick hack
+                if (!world.isClient)
+                    this.dataTracker.set(BE_NBT, blockEntity.writeNbt(new NbtCompound()));
+            }
+            //kinda derpy
+            if (world.isClient) {
+                getContainedBlock().getBlock().randomDisplayTick(getContainedBlock(), world, fakeBlockPos(), new Random());
+            }
         }
-        //kinda derpy
-        if (world.isClient) {
-            getContainedBlock().getBlock().randomDisplayTick(getContainedBlock(), world, fakeBlockPos(), new Random());
-        }
-        if (!world.isClient)
-            this.dataTracker.set(BE_NBT, blockEntity.writeNbt(new NbtCompound()));
 
     }
     public void onActivatorRail(int x, int y, int z, boolean powered) {
-        if (powered)
-            getContainedBlock().neighborUpdate(world, fakeBlockPos(), getContainedBlock().getBlock(), fakeBlockPos(), false);
+        if (powered && this.hasCustomBlock())
+            if (getContainedBlock().getProperties().contains(DispenserBlock.FACING))
+                getStateWithCorrectedDirection().neighborUpdate(world, fakeBlockPos(), getContainedBlock().getBlock(), fakeBlockPos(), false);
+    }
+
+    @Override
+    protected void moveOnRail(BlockPos pos, BlockState state) {
+        super.moveOnRail(pos, state);
+    }
+
+    public BlockState getStateWithCorrectedDirection() {
+        BlockState state = getContainedBlock();
+        Direction dir = state.get(DispenserBlock.FACING);
+        if (dir == Direction.DOWN || dir == Direction.UP) return state;
+        float rotation = getHorizontalFacing().asRotation() + dir.asRotation();
+        return state.with(DispenserBlock.FACING, Direction.fromRotation(rotation));
     }
     @Override
     public Type getMinecartType() {
